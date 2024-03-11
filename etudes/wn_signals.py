@@ -35,7 +35,7 @@ class WN_Signal(object):
         elif not efac and equad:
             self._get_ndiag = self._equad_ndiag
         else:
-            return # TODO: add error case for no WN signal
+            return # TODO: add case for no WN signal
 
     def _efac_ndiag(self, pars):
         return pars[self.efacname]**2 * self.psr.toaerrs**2
@@ -49,6 +49,10 @@ class WN_Signal(object):
     @jax.jit
     def get_ndiag(self, pars):
         return self._get_ndiag(pars)
+    
+    @jax.jit
+    def get_delay(self, pars):
+        return jnp.zeros_like(self.psr.toas)
 
     # Necessary flatten and unflatten methods to register class
     # as a PyTree

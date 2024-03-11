@@ -95,7 +95,7 @@ class CW_Signal(object):
         fplus, fcross, _ = create_gw_antenna_pattern(self.psr._pos, gwtheta, cw_phi)
 
         # get pulsar time
-        toas = self.psr._toas - self.tref
+        toas = self.psr.toas - self.tref
 
         # orbital frequency
         w0 = jnp.pi * fgw

@@ -74,6 +74,10 @@ class ECORR_GP_Signal(object):
     def get_phi(self, pars):
         return self._ecorr_prior(pars)
     
+    @jax.jit
+    def get_delay(self, pars):
+        return jnp.zeros_like(self.psr.toas)
+    
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
@@ -109,6 +113,10 @@ class RN_Signal(object):
     @jax.jit
     def get_phi(self, pars):
         return self._powerlaw(pars)
+    
+    @jax.jit
+    def get_delay(self, pars):
+        return jnp.zeros_like(self.psr.toas)
 
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
@@ -129,11 +137,11 @@ class RN_Common_Signal(object):
         self.psr = psr
 
 @register_pytree_node_class
-class TimingModel(object):
+class Timing_Model(object):
     """
     Class for linearized timing model
     """
-    def __init__(self, psr, weights=None):
+    def __init__(self, psr):
         self.psr = psr
 
         self.Mmat = psr.Mmat
@@ -146,10 +154,14 @@ class TimingModel(object):
     def get_phi(self, pars):
         return self._tm_prior(pars)
     
+    @jax.jit
+    def get_delay(self, pars):
+        return jnp.zeros_like(self.psr.toas)
+    
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psr, self.weights,)
+        return (), (self.psr,)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
