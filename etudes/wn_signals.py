@@ -16,7 +16,7 @@ class WN_Signal(object):
     Class for single-pulsar white noise signals.
     """
 
-    def __init__(self, psr, efac=True, equad=True):
+    def __init__(self, psr, efac=True, equad=True, fix_wn=True, fix_wn_vals=None):
         self.psr = psr
 
         self.has_efac = efac
@@ -25,9 +25,15 @@ class WN_Signal(object):
         self.efacname = '{}_efac'.format(psr.name)
         self.equadname = '{}_log10_t2equad'.format(psr.name)
 
-        self._init_ndiag(efac=self.has_efac, equad=self.has_equad)
+        self.fix_wn = fix_wn
+        self.fix_wn_vals = fix_wn_vals
+
+        if fix_wn:
+            self._init_fix_ndiag(efac=self.has_efac, equad=self.has_equad, fix_wn_vals=fix_wn_vals)
+        else:
+            self._init_vary_ndiag(efac=self.has_efac, equad=self.has_equad)
     
-    def _init_ndiag(self, efac=True, equad=True):
+    def _init_vary_ndiag(self, efac=True, equad=True):
         if efac and equad:
             self._get_ndiag = self._combined_ndiag
         elif efac and not equad:
@@ -36,6 +42,22 @@ class WN_Signal(object):
             self._get_ndiag = self._equad_ndiag
         else:
             return # TODO: add case for no WN signal
+    
+    def _init_fix_ndiag(self, efac=True, equad=True, fix_wn_vals=None):
+        if efac and equad:
+            self._ndiag = self._combined_ndiag(fix_wn_vals)
+        elif efac and not equad:
+            self._ndiag = self._efac_ndiag(fix_wn_vals)
+        elif not efac and equad:
+            self._ndiag = self._equad_ndiag(fix_wn_vals)
+        else:
+            return
+        
+        # Hopefully this caches ndiag and doesn't recompute it each time
+        self._get_ndiag = self._return_fix_ndiag
+
+    def _return_fix_ndiag(self, pars):
+        return self._ndiag
 
     def _efac_ndiag(self, pars):
         return pars[self.efacname]**2 * self.psr.toaerrs**2
@@ -57,7 +79,7 @@ class WN_Signal(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psr, self.has_efac, self.has_equad)
+        return (), (self.psr, self.has_efac, self.has_equad, self.fix_wn, self.fix_wn_vals)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):

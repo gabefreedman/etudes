@@ -30,7 +30,8 @@ class CombinedSignal_1psr(object):
     """
     def __init__(self, psr, has_wn=True, has_basis_ecorr=True,
                  has_rn=True, has_tm=True, has_cw=True,
-                 Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None):
+                 Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
+                 efac=True, equad=True, fix_wn=True, fix_wn_vals=None):
         self.psr = psr
 
         self.has_wn=has_wn
@@ -44,12 +45,27 @@ class CombinedSignal_1psr(object):
         self.Fmat = Fmat
         self.Ffreqs = Ffreqs
 
-        self._init_model(Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs)
-        self.T = jnp.concatenate([Umat, Fmat, self.psr.Mmat], axis=1)
+        self.efac = efac
+        self.equad = equad
+        self.fix_wn = fix_wn
+        self.fix_wn_vals = fix_wn_vals
 
-    def _init_model(self, Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None):
+        self._init_model(Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs,
+                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+        self.T = self._init_basis(Umat=Umat, Fmat=Fmat)
+    
+    def _init_basis(self, Umat=None, Fmat=None):
+        T = self.psr.Mmat
+        if Fmat is not None:
+            T = jnp.concatenate([Fmat, T], axis=1)
+        if Umat is not None:
+            T = jnp.concatenate([Umat, T], axis=1)
+        return T
+
+    def _init_model(self, Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
+                    fix_wn=True, fix_wn_vals=None):
         if self.has_wn:
-            self.wn_signal = WN_Signal(self.psr)
+            self.wn_signal = WN_Signal(self.psr, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if self.has_basis_ecorr:
             self.basis_ecorr_signal = ECORR_GP_Signal(self.psr, Umat=Umat, weights=ecorr_weights)
         if self.has_tm:
@@ -69,10 +85,10 @@ class CombinedSignal_1psr(object):
     
     @jax.jit
     def get_phi(self, pars):
-        ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+        #ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
         rn_phi = self.rn_signal.get_phi(pars)
         tm_phi = self.tm_signal.get_phi(pars)
-        return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
+        return jnp.concatenate([rn_phi, tm_phi])
     
     @jax.jit
     def get_phiinv_logdet(self, pars):
@@ -127,7 +143,8 @@ class CombinedSignal_1psr(object):
     def tree_flatten(self):
         return (), (self.psr, self.has_wn, self.has_basis_ecorr,
                     self.has_rn, self.has_tm, self.has_cw,
-                    self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs)
+                    self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
+                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
