@@ -92,16 +92,18 @@ class RN_Signal(object):
     """
     Class for intrinsic-pulsar red noise signals
     """
-    def __init__(self, psr, Fmat=None, Ffreqs=None):
+    def __init__(self, psr, Fmat=None, Ffreqs=None, ncomps=30):
         self.psr = psr
+        self.ncomps = ncomps
 
         self.rn_A_name = '{}_rn_log10_A'.format(psr.name)
         self.rn_gamma_name = '{}_rn_gamma'.format(psr.name)
 
-        #self.Fmat = Fmat
-        #self.Ffreqs = Ffreqs
-
-        self.Fmat, self.Ffreqs = create_fourierdesignmatrix_red(psr.toas)
+        if isinstance(Fmat, jax.Array) and isinstance(Ffreqs, jax.Array):
+            self.Fmat = Fmat
+            self.Ffreqs = Ffreqs
+        else:
+            self.Fmat, self.Ffreqs = create_fourierdesignmatrix_red(psr.toas, nmodes=ncomps)
     
     def _init_basis(self, psr):
         return create_fourierdesignmatrix_red(psr.toas)
@@ -121,13 +123,13 @@ class RN_Signal(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (self.Fmat, self.Ffreqs,), (self.psr,)
+        return (self.Fmat, self.Ffreqs,), (self.psr, self.ncomps)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        psr, = aux_data
+        psr, ncomps = aux_data
         Fmat, Ffreqs, = children
-        return cls(psr, Fmat, Ffreqs)
+        return cls(psr, Fmat, Ffreqs, ncomps)
 
 class RN_Common_Signal(object):
     """
