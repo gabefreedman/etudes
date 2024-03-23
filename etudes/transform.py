@@ -31,6 +31,20 @@ class EtudesPTA(_EtudesPTA):
         self.pmaxs = jnp.array([par.pmax for par in params])
         self.pavgs = (self.pmaxs + self.pmins) / 2
     
+    @jax.jit
+    def get_lnprior(self, xs):
+        # For now this will just be 0 since all test
+        # priors are uniform
+        return 0
+    
+    @jax.jit
+    def get_lnlikelihood(self, xs):
+        return self.ll_fn(xs)
+    
+    @jax.jit
+    def get_lnprob(self, xs):
+        return self.get_lnlikelihood(xs) + self.get_lnprior(xs)
+    
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
@@ -100,6 +114,21 @@ class Interval(EtudesPTA):
         lj_grad = jnp.zeros_like(p)
         lj_grad = (1 - jnp.exp(p)) / (1 + jnp.exp(p))
         return lj, lj_grad
+    
+    @jax.jit
+    def get_lnprob(self, p):
+        """
+        Return log probability in transformed parameter space at
+        input parameter vector. This function includes the additional
+        component coming from the Jacobian
+        (i.e., ret = lnlikelihood + lnprior + lnjacobian)
+        """
+        x = self.backward(p)
+        ll = self.get_lnlikelihood(x)
+        lp = self.get_lnprior(x)
+        lj = self.logjacobian(p)
+
+        return ll + lp + lj
 
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
