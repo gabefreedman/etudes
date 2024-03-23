@@ -30,8 +30,8 @@ class EtudesPTA(object):
     function such that it can be written in terms of JAX primitives
     and break the natural looping over individual pulsars.
     """
-    def __init__(self, psrs, param_names, has_wn=True, has_basis_ecorr=True,
-               has_rn=True, has_tm=True, has_cw=True,
+    def __init__(self, psrs, has_wn=True, has_basis_ecorr=True,
+               has_rn=True, has_tm=True, has_cw=True, param_names=None,
                Umats=None, ecorr_weights=None, Fmats=None, Ffreqs=None,
                efac=True, equad=True, fix_wn=True, fix_wn_vals=None, TNTs=None):
         self.psrs = psrs
@@ -65,6 +65,9 @@ class EtudesPTA(object):
         self.fix_wn = fix_wn
         self.fix_wn_vals = fix_wn_vals
 
+        if not self.param_names:
+            self._name_params()
+
         # Create individual pulsar signal objects
         self.signalcollections = []
         for psr, Umat, ecw, Fmat, Ff in zip(self.psrs, self.Umats,
@@ -83,6 +86,33 @@ class EtudesPTA(object):
             self.ll_fn = self.ll_fn_fixwn
         else:
             self.ll_fn = self.ll_fn_varywn
+    
+    def _name_params(self):
+        """
+        Populate parameter namespace given included signals.
+
+        (Currently no backend selection on white noise... will add later)
+        """
+        pars = []
+
+        for psr in self.psrs:
+            if self.has_wn and not self.fix_wn:
+                if self.efac:
+                    pars.append('{}_efac'.format(psr.name))
+                if self.equad:
+                    pars.append('{}_log10_t2equad'.format(psr.name))
+            if self.has_rn:
+                    pars.append('{}_rn_gamma'.format(psr.name))
+                    pars.append('{}_rn_log10_A'.format(psr.name))
+        
+        # If searching for continuous wave signal
+        if self.has_cw:
+            cw_pars = ['cw_cosinc', 'cw_costheta', 'cw_log10_Mc',
+                       'cw_log10_fgw', 'cw_log10_h', 'cw_phase0',
+                       'cw_phi', 'cw_psi']
+            pars.extend(cw_pars)
+        
+        self.param_names = pars
 
     def _map_params(self, params):
         ret = {}
@@ -144,7 +174,7 @@ class EtudesPTA(object):
     # as a PyTree
     def tree_flatten(self):
         return (), (self.psrs, self.param_names, self.has_wn, self.has_basis_ecorr,
-                    self.has_rn, self.has_tm, self.has_cw,
+                    self.has_rn, self.has_tm, self.has_cw, self.param_names,
                     self.Umats, self.ecorr_weights, self.Fmats, self.Ffreqs,
                     self.efac, self.equad, self.fix_wn, self.fix_wn_vals,
                     self.TNTs)
