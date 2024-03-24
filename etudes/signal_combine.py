@@ -17,7 +17,7 @@ from jax.tree_util import register_pytree_node_class
 from etudes.etudes.wn_signals import WN_Signal
 from etudes.etudes.deterministic import CW_Signal
 from etudes.etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
-                                      RN_Signal)
+                                      RN_Signal, create_fourierdesignmatrix_red)
 
 @register_pytree_node_class
 class _EtudesPTA(object):
@@ -120,38 +120,39 @@ class _Etudes1PsrSignal(object):
     """
     def __init__(self, T=None, TNT=None, psr=None,
                  has_wn=True, has_basis_ecorr=True,
-                 has_rn=True, has_tm=True, has_cw=True,
+                 has_rn=True, has_tm=True, has_gwb=True, has_cw=True,
                  Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
                  efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
-                 tref=0):
+                 rn_comps=30, gwb_comps=5, tref=0):
         self.psr = psr
 
         self.has_wn = has_wn
         self.has_basis_ecorr = has_basis_ecorr
         self.has_rn = has_rn
         self.has_tm = has_tm
+        self.has_gwb = has_gwb
         self.has_cw = has_cw
 
         self.Umat = Umat
         self.ecorr_weights = ecorr_weights
         self.Fmat = Fmat
         self.Ffreqs = Ffreqs
-        #self.T = T
-        #self.TNT = TNT
 
         self.efac = efac
         self.equad = equad
         self.fix_wn = fix_wn
         self.fix_wn_vals = fix_wn_vals
 
+        self.rn_comps = rn_comps
+        self.gwb_comps = gwb_comps
         self.tref = tref
 
         self._init_model(psr, has_wn=has_wn, has_basis_ecorr=has_basis_ecorr,
-                         has_tm=has_tm, has_rn=has_rn, has_cw=has_cw,
+                         has_tm=has_tm, has_rn=has_rn, has_gwb=has_gwb, has_cw=has_cw,
                          Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs,
-                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals, tref=tref)
+                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals,
+                         rn_comps=rn_comps, gwb_comps=gwb_comps, tref=tref)
         self.T, self.TNT = self._init_basis(Umat=Umat, Fmat=Fmat)
-
         self._init_get_delay(has_cw=has_cw)
     
     def _init_basis(self, Umat=None, Fmat=None, fix_wn_vals=None):
@@ -178,9 +179,10 @@ class _Etudes1PsrSignal(object):
 
 
     def _init_model(self, psr, has_wn=True, has_basis_ecorr=False,
-                    has_tm=True, has_rn=True, has_cw=True,
+                    has_tm=True, has_rn=True, has_gwb=True, has_cw=True,
                     Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                    fix_wn=True, fix_wn_vals=None, tref=0):
+                    fix_wn=True, fix_wn_vals=None,
+                    rn_comps=30, gwb_comps=5, tref=0):
         if has_wn:
             self.wn_signal = WN_Signal(psr, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if has_basis_ecorr:
@@ -188,7 +190,9 @@ class _Etudes1PsrSignal(object):
         if has_tm:
             self.tm_signal = Timing_Model(psr)
         if has_rn:
-            self.rn_signal = RN_Signal(psr, Fmat=Fmat, Ffreqs=Ffreqs)
+            self.rn_signal = RN_Signal(psr, Fmat=Fmat, Ffreqs=Ffreqs, ncomps=rn_comps)
+        if has_gwb:
+            self.gwb_signal = RN_Signal(psr, Fmat=Fmat[:,:2*gwb_comps], Ffreqs=Ffreqs[:2*gwb_comps], ncomps=gwb_comps)
         if has_cw:
             self.cw_signal = CW_Signal(psr, tref=tref)
     
@@ -208,6 +212,8 @@ class _Etudes1PsrSignal(object):
     def get_phi(self, pars):
         #ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
         rn_phi = self.rn_signal.get_phi(pars)
+        gw_phi = self.gwb_signal.get_phi(pars)
+        rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([rn_phi, tm_phi])
     
@@ -263,9 +269,10 @@ class _Etudes1PsrSignal(object):
     # as a PyTree
     def tree_flatten(self):
         return (self.T, self.TNT), (self.psr, self.has_wn, self.has_basis_ecorr,
-                    self.has_rn, self.has_tm, self.has_cw,
+                    self.has_rn, self.has_tm, self.has_gwb, self.has_cw,
                     self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
-                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals, self.tref)
+                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals,
+                    self.rn_comps, self.gwb_comps, self.tref)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):

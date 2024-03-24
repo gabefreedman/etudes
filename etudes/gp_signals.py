@@ -20,6 +20,9 @@ def create_fourierdesignmatrix_red(toas, nmodes=30):
     F = jnp.zeros((N, 2 * nmodes))
     Tspan = jnp.max(toas) - jnp.min(toas)
 
+    # This is just here to test jaxpr
+    c = N * 50.0
+
     f = 1.0 * jnp.arange(1, nmodes + 1) / Tspan
     Ffreqs = jnp.repeat(f, 2)
 
@@ -91,6 +94,8 @@ class ECORR_GP_Signal(object):
 class RN_Signal(object):
     """
     Class for intrinsic-pulsar red noise signals
+    (or uncorrelated common signals... they're modeled
+    the same way)
     """
     def __init__(self, psr, Fmat=None, Ffreqs=None, ncomps=30):
         self.psr = psr
@@ -131,12 +136,48 @@ class RN_Signal(object):
         Fmat, Ffreqs, = children
         return cls(psr, Fmat, Ffreqs, ncomps)
 
-class RN_Common_Signal(object):
+class Common_GW_Signal(object):
     """
     Class for common-process red noise signal
     """
-    def __init__(self, psr):
+    def __init__(self, psr, Fmat=None, Ffreqs=None, ncomps=5):
         self.psr = psr
+        self.ncomps = ncomps
+
+        self.gw_A_name = 'gamma_gw'
+        self.gw_gamma_name = 'log10_A_gw'
+
+        if isinstance(Fmat, jax.Array) and isinstance(Ffreqs, jax.Array):
+            self.Fmat = Fmat
+            self.Ffreqs = Ffreqs
+        else:
+            self.Fmat, self.Ffreqs = create_fourierdesignmatrix_red(psr.toas, nmodes=ncomps)
+    
+    def _init_basis(self, psr):
+        return create_fourierdesignmatrix_red(psr.toas)
+
+    def _powerlaw(self, pars):
+        df = jnp.diff(jnp.concatenate((jnp.array([0]), self.Ffreqs[::2])))
+        return self.Ffreqs ** (-pars[self.gw_gamma_name]) * (10**pars[self.gw_A_name]) ** 2 / 12.0 / jnp.pi**2 * const.fyr ** (pars[self.rn_gamma_name] - 3) * jnp.repeat(df, 2)
+
+    @jax.jit
+    def get_phi(self, pars):
+        return self._powerlaw(pars)
+    
+    @jax.jit
+    def get_delay(self, pars):
+        return jnp.zeros_like(self.psr.toas)
+
+    # Necessary flatten and unflatten methods to register class
+    # as a PyTree
+    def tree_flatten(self):
+        return (self.Fmat, self.Ffreqs,), (self.psr, self.ncomps)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        psr, ncomps = aux_data
+        Fmat, Ffreqs, = children
+        return cls(psr, Fmat, Ffreqs, ncomps)
 
 @register_pytree_node_class
 class Timing_Model(object):
