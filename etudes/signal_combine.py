@@ -122,7 +122,8 @@ class _Etudes1PsrSignal(object):
                  has_wn=True, has_basis_ecorr=True,
                  has_rn=True, has_tm=True, has_cw=True,
                  Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                 efac=True, equad=True, fix_wn=True, fix_wn_vals=None):
+                 efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
+                 tref=0):
         self.psr = psr
 
         self.has_wn = has_wn
@@ -143,10 +144,12 @@ class _Etudes1PsrSignal(object):
         self.fix_wn = fix_wn
         self.fix_wn_vals = fix_wn_vals
 
+        self.tref = tref
+
         self._init_model(psr, has_wn=has_wn, has_basis_ecorr=has_basis_ecorr,
                          has_tm=has_tm, has_rn=has_rn, has_cw=has_cw,
                          Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs,
-                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals, tref=tref)
         self.T, self.TNT = self._init_basis(Umat=Umat, Fmat=Fmat)
 
         self._init_get_delay(has_cw=has_cw)
@@ -177,7 +180,7 @@ class _Etudes1PsrSignal(object):
     def _init_model(self, psr, has_wn=True, has_basis_ecorr=False,
                     has_tm=True, has_rn=True, has_cw=True,
                     Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                    fix_wn=True, fix_wn_vals=None):
+                    fix_wn=True, fix_wn_vals=None, tref=0):
         if has_wn:
             self.wn_signal = WN_Signal(psr, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if has_basis_ecorr:
@@ -187,7 +190,7 @@ class _Etudes1PsrSignal(object):
         if has_rn:
             self.rn_signal = RN_Signal(psr, Fmat=Fmat, Ffreqs=Ffreqs)
         if has_cw:
-            self.cw_signal = CW_Signal(psr)
+            self.cw_signal = CW_Signal(psr, tref=tref)
     
     @jax.jit
     def _get_delay_cw(self, pars):
@@ -262,7 +265,7 @@ class _Etudes1PsrSignal(object):
         return (self.T, self.TNT), (self.psr, self.has_wn, self.has_basis_ecorr,
                     self.has_rn, self.has_tm, self.has_cw,
                     self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
-                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals)
+                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals, self.tref)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):

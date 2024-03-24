@@ -97,8 +97,7 @@ class Interval(EtudesPTA):
         """
         Log of Jacobian evaluated at input parameter vector.
         """
-        lj = jnp.sum(jnp.log(self.b-self.a) + p -
-                    2*jnp.log(1.0+jnp.exp(p)))
+        lj = jnp.sum(jnp.log(self.b-self.a) + p - 2*jnp.log(1.0+jnp.exp(p)))
         
         return lj
     
