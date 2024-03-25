@@ -17,7 +17,7 @@ from jax.tree_util import register_pytree_node_class
 from etudes.etudes.wn_signals import WN_Signal
 from etudes.etudes.deterministic import CW_Signal
 from etudes.etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
-                                      RN_Signal, create_fourierdesignmatrix_red)
+                                      RN_Signal, Common_GW_Signal)
 
 @register_pytree_node_class
 class _EtudesPTA(object):
@@ -150,7 +150,7 @@ class _Etudes1PsrSignal(object):
         self._init_model(psr, has_wn=has_wn, has_basis_ecorr=has_basis_ecorr,
                          has_tm=has_tm, has_rn=has_rn, has_gwb=has_gwb, has_cw=has_cw,
                          Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs,
-                         fix_wn=fix_wn, fix_wn_vals=fix_wn_vals,
+                         efac=efac, equad=equad, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals,
                          rn_comps=rn_comps, gwb_comps=gwb_comps, tref=tref)
         self.T, self.TNT = self._init_basis(Umat=Umat, Fmat=Fmat)
         self._init_get_delay(has_cw=has_cw)
@@ -181,10 +181,11 @@ class _Etudes1PsrSignal(object):
     def _init_model(self, psr, has_wn=True, has_basis_ecorr=False,
                     has_tm=True, has_rn=True, has_gwb=True, has_cw=True,
                     Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                    fix_wn=True, fix_wn_vals=None,
+                    efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
                     rn_comps=30, gwb_comps=5, tref=0):
         if has_wn:
-            self.wn_signal = WN_Signal(psr, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+            self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
+                                       fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if has_basis_ecorr:
             self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights)
         if has_tm:
@@ -192,7 +193,7 @@ class _Etudes1PsrSignal(object):
         if has_rn:
             self.rn_signal = RN_Signal(psr, Fmat=Fmat, Ffreqs=Ffreqs, ncomps=rn_comps)
         if has_gwb:
-            self.gwb_signal = RN_Signal(psr, Fmat=Fmat[:,:2*gwb_comps], Ffreqs=Ffreqs[:2*gwb_comps], ncomps=gwb_comps)
+            self.gwb_signal = Common_GW_Signal(psr, Fmat=Fmat[:,:2*gwb_comps], Ffreqs=Ffreqs[:2*gwb_comps], ncomps=gwb_comps)
         if has_cw:
             self.cw_signal = CW_Signal(psr, tref=tref)
     

@@ -136,6 +136,7 @@ class RN_Signal(object):
         Fmat, Ffreqs, = children
         return cls(psr, Fmat, Ffreqs, ncomps)
 
+@register_pytree_node_class
 class Common_GW_Signal(object):
     """
     Class for common-process red noise signal
@@ -158,7 +159,7 @@ class Common_GW_Signal(object):
 
     def _powerlaw(self, pars):
         df = jnp.diff(jnp.concatenate((jnp.array([0]), self.Ffreqs[::2])))
-        return self.Ffreqs ** (-pars[self.gw_gamma_name]) * (10**pars[self.gw_A_name]) ** 2 / 12.0 / jnp.pi**2 * const.fyr ** (pars[self.rn_gamma_name] - 3) * jnp.repeat(df, 2)
+        return self.Ffreqs ** (-pars[self.gw_gamma_name]) * (10**pars[self.gw_A_name]) ** 2 / 12.0 / jnp.pi**2 * const.fyr ** (pars[self.gw_gamma_name] - 3) * jnp.repeat(df, 2)
 
     @jax.jit
     def get_phi(self, pars):
