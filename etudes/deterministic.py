@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
-from etudes.etudes import constants as const
+import etudes.constants as const
 
 
 def create_gw_antenna_pattern(pos, gwtheta, gwphi):

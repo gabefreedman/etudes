@@ -14,9 +14,9 @@ import jax.numpy as jnp
 import jax.scipy.linalg as jsl
 from jax.tree_util import register_pytree_node_class
 
-from etudes.etudes.wn_signals import WN_Signal
-from etudes.etudes.deterministic import CW_Signal
-from etudes.etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
+from etudes.wn_signals import WN_Signal
+from etudes.deterministic import CW_Signal
+from etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
                                       RN_Signal, Common_GW_Signal)
 
 @register_pytree_node_class

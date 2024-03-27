@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "etudes"
+version = "0.1.0"
+description = "PTA analyses with JAX and HMC"
+authors = ["Gabe Freedman <freedma5@uwm.edu>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+jax = "^0.4.25"
+jaxlib = "^0.4.25"
+numpy = "^1.26.4"
+scipy = "^1.12.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

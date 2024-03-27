@@ -12,7 +12,7 @@ from jax.tree_util import register_pytree_node_class
 from jax import config
 config.update('jax_enable_x64', True)
 
-from etudes.etudes import constants as const
+import etudes.constants as const
 
 
 def create_fourierdesignmatrix_red(toas, nmodes=30):
