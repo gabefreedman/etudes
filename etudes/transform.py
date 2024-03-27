@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
-from etudes.etudes.signal_combine import _EtudesPTA
+from etudes.signal_combine import _EtudesPTA
 
 @register_pytree_node_class
 class EtudesPTA(_EtudesPTA):
