@@ -19,7 +19,7 @@ from blackjax.progress_bar import progress_bar_scan
 # etudes-specific imports
 from etudes.parameters import Uniform
 from etudes.transform import Interval
-from etudes.signal_combine import _Etudes1PsrSignal
+from etudes.signal_combine import Etudes1PsrSignal
 from etudes.gp_signals import create_fourierdesignmatrix_red
 
 
@@ -65,7 +65,7 @@ def make_psr_objs(psrs, Fmats, Ffreqs, Ts, has_basis_ecorr=False, has_gwb=True, 
     psrobjs = []
     tref = np.max([p.toas.min() for p in psrs])
     for psr, Fmat, Ff, T in zip(psrs, Fmats, Ffreqs, Ts):
-        psrobjs.append(_Etudes1PsrSignal(psr=psr, has_basis_ecorr=has_basis_ecorr, has_gwb=has_gwb, has_cw=has_cw,
+        psrobjs.append(Etudes1PsrSignal(psr=psr, has_basis_ecorr=has_basis_ecorr, has_gwb=has_gwb, has_cw=has_cw,
                                          has_tm=True, Fmat=Fmat, Ffreqs=Ff, T=T, efac=efac, equad=equad, fix_wn=fix_wn,
                                          fix_wn_vals=fix_wn_vals, tref=tref))
     

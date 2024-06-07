@@ -110,7 +110,7 @@ class _EtudesPTA(object):
 
 
 @register_pytree_node_class
-class _Etudes1PsrSignal(object):
+class Etudes1PsrSignal(object):
     """
     Single-pulsar concatenated signal object. All potential signals
     should (key word: should) be included here as potential inputs.
