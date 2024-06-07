@@ -11,7 +11,10 @@ pip install git+https://github.com/gabefreedman/etudes.git
 See examples folder for tips on setting up a continuous gravitational wave source with a common red-noise process included in the model. The example sets up the model and sampler. From there it can be extrapolated to more complicated (or simpler) modeling choices. Other example scripts will be added in the future.
 
 ## To-do Development
-- Fix bug in per-pulsar white-noise backend selection and redeploy.
+- ~~Fix bug in per-pulsar white-noise backend selection and redeploy.~~
+- Add and test pulsar term inclusion in CW delay functions.
+- Options for varied EFAC, EQUAD, GP_ECORR for models with `backend_select=True`.
+- More example notebooks/scripts.
 
 ## Favorite etudes?
 I'm only really familiar with the broader repoirtoire for piano. The Scriabin Etude in D-sharp minor Op.8 No. 12 is an all-time favorite. The Chopin Etude in E-Major Op. 10 No. 3 is also up there. How about you?
