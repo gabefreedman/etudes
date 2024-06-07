@@ -105,7 +105,7 @@ class WN_Signal_selec(object):
         self.fix_wn = fix_wn
         self.fix_wn_vals = fix_wn_vals
 
-        self.masks = self._select_by_backend(psr, fix_wn_vals)
+        self._select_by_backend(psr, fix_wn_vals)
 
         if fix_wn:
             self._init_fix_ndiag(efac=self.has_efac, equad=self.has_equad, fix_wn_vals=fix_wn_vals)
@@ -114,18 +114,17 @@ class WN_Signal_selec(object):
 
     
     def _select_by_backend(self, psr, fix_wn_vals):
-        a = psr.toaerrs.shape[0]
         backends = np.unique(psr.backend_flags)
-        masks = jnp.ones((backends.shape[0], a))
+        self.masks = jnp.ones((backends.shape[0], psr.toas.shape[0]))
         self.efacs = jnp.zeros(backends.shape[0])
         self.equads = jnp.zeros(backends.shape[0])
 
         for i, val in enumerate(backends):
             mask_bool = (psr.backend_flags == val)
-            masks = masks.at[i,:].set(np.ma.array(np.ones(a), mask=~mask_bool, fill_value=0.0).filled())
+            self.masks = self.masks.at[i,:].set(np.ma.array(np.ones(psr.toas.shape[0]), mask=~mask_bool, fill_value=0.0).filled())
             self.efacs = self.efacs.at[i].set(fix_wn_vals['_'.join([psr.name, val, 'efac'])])
             self.equads = self.equads.at[i].set(fix_wn_vals['_'.join([psr.name, val, 'log10_t2equad'])])
-        return masks
+        return
     
     def _init_fix_ndiag(self, efac=True, equad=True, fix_wn_vals=None):
         if efac and equad:
