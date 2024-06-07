@@ -14,9 +14,9 @@ import jax.numpy as jnp
 import jax.scipy.linalg as jsl
 from jax.tree_util import register_pytree_node_class
 
-from etudes.wn_signals import WN_Signal
+from etudes.wn_signals import WN_Signal, WN_Signal_selec
 from etudes.deterministic import CW_Signal
-from etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
+from etudes.gp_signals import (ECORR_GP_Signal, ECORR_GP_Signal_selec, Timing_Model,
                                       RN_Signal, Common_GW_Signal)
 
 @register_pytree_node_class
@@ -118,13 +118,14 @@ class Etudes1PsrSignal(object):
     TODO: Find a way to appropriately loop through all given signal
     functions such that it can be written in terms of JAX primitives.
     """
-    def __init__(self, T=None, TNT=None, psr=None,
+    def __init__(self, T=None, TNT=None, psr=None, backend_select=False,
                  has_wn=True, has_basis_ecorr=True,
                  has_rn=True, has_tm=True, has_gwb=True, has_cw=True,
                  Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
                  efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
                  rn_comps=30, gwb_comps=5, tref=0):
         self.psr = psr
+        self.backend_select = backend_select
 
         self.has_wn = has_wn
         self.has_basis_ecorr = has_basis_ecorr
@@ -178,16 +179,26 @@ class Etudes1PsrSignal(object):
             self.get_delay = self._get_delay_nocw
 
 
-    def _init_model(self, psr, has_wn=True, has_basis_ecorr=False,
+    def _init_model(self, psr, backend_select=False, has_wn=True, has_basis_ecorr=False,
                     has_tm=True, has_rn=True, has_gwb=True, has_cw=True,
                     Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
                     efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
                     rn_comps=30, gwb_comps=5, tref=0):
         if has_wn:
-            self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
-                                       fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+            if backend_select:
+                self.wn_signal = WN_Signal_selec(psr, efac=efac, equad=equad, fix_wn=fix_wn,
+                                                 fix_wn_vals=fix_wn_vals)
+            else:
+                self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
+                                           fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if has_basis_ecorr:
-            self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights)
+            if backend_select:
+                self.basis_ecorr_signal = ECORR_GP_Signal_selec(psr, Umat=Umat,
+                                                                weights=ecorr_weights, fix_wn=fix_wn,
+                                                                fix_wn_vals=fix_wn_vals)
+            else:
+                self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights, fix_wn=fix_wn,
+                                                          fix_wn_vals=fix_wn_vals)
         if has_tm:
             self.tm_signal = Timing_Model(psr)
         if has_rn:
@@ -311,7 +322,7 @@ class Etudes1PsrSignal(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (self.T, self.TNT), (self.psr, self.has_wn, self.has_basis_ecorr,
+        return (self.T, self.TNT), (self.psr, self.backend_select, self.has_wn, self.has_basis_ecorr,
                     self.has_rn, self.has_tm, self.has_gwb, self.has_cw,
                     self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
                     self.efac, self.equad, self.fix_wn, self.fix_wn_vals,
