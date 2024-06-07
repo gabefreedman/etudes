@@ -14,9 +14,9 @@ import jax.numpy as jnp
 import jax.scipy.linalg as jsl
 from jax.tree_util import register_pytree_node_class
 
-from etudes.wn_signals import WN_Signal
+from etudes.wn_signals import WN_Signal, WN_Signal_selec
 from etudes.deterministic import CW_Signal
-from etudes.gp_signals import (ECORR_GP_Signal, Timing_Model,
+from etudes.gp_signals import (ECORR_GP_Signal, ECORR_GP_Signal_selec, Timing_Model,
                                       RN_Signal, Common_GW_Signal)
 
 @register_pytree_node_class
@@ -110,7 +110,7 @@ class _EtudesPTA(object):
 
 
 @register_pytree_node_class
-class _Etudes1PsrSignal(object):
+class Etudes1PsrSignal(object):
     """
     Single-pulsar concatenated signal object. All potential signals
     should (key word: should) be included here as potential inputs.
@@ -118,13 +118,14 @@ class _Etudes1PsrSignal(object):
     TODO: Find a way to appropriately loop through all given signal
     functions such that it can be written in terms of JAX primitives.
     """
-    def __init__(self, T=None, TNT=None, psr=None,
+    def __init__(self, T=None, TNT=None, psr=None, backend_select=False,
                  has_wn=True, has_basis_ecorr=True,
                  has_rn=True, has_tm=True, has_gwb=True, has_cw=True,
                  Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
                  efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
                  rn_comps=30, gwb_comps=5, tref=0):
         self.psr = psr
+        self.backend_select = backend_select
 
         self.has_wn = has_wn
         self.has_basis_ecorr = has_basis_ecorr
@@ -178,16 +179,26 @@ class _Etudes1PsrSignal(object):
             self.get_delay = self._get_delay_nocw
 
 
-    def _init_model(self, psr, has_wn=True, has_basis_ecorr=False,
+    def _init_model(self, psr, backend_select=False, has_wn=True, has_basis_ecorr=False,
                     has_tm=True, has_rn=True, has_gwb=True, has_cw=True,
                     Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
                     efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
                     rn_comps=30, gwb_comps=5, tref=0):
         if has_wn:
-            self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
-                                       fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+            if backend_select:
+                self.wn_signal = WN_Signal_selec(psr, efac=efac, equad=equad, fix_wn=fix_wn,
+                                                 fix_wn_vals=fix_wn_vals)
+            else:
+                self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
+                                           fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
         if has_basis_ecorr:
-            self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights)
+            if backend_select:
+                self.basis_ecorr_signal = ECORR_GP_Signal_selec(psr, Umat=Umat,
+                                                                weights=ecorr_weights, fix_wn=fix_wn,
+                                                                fix_wn_vals=fix_wn_vals)
+            else:
+                self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights, fix_wn=fix_wn,
+                                                          fix_wn_vals=fix_wn_vals)
         if has_tm:
             self.tm_signal = Timing_Model(psr)
         if has_rn:
@@ -196,6 +207,19 @@ class _Etudes1PsrSignal(object):
             self.gwb_signal = Common_GW_Signal(psr, Fmat=Fmat[:,:2*gwb_comps], Ffreqs=Ffreqs[:2*gwb_comps], ncomps=gwb_comps)
         if has_cw:
             self.cw_signal = CW_Signal(psr, tref=tref)
+    
+    def _init_phi_fn(self, has_basis_ecorr=False, has_rn=True, has_gwb=True):
+        # get_phi changes form based on presence of ECORR, red-noise signal,
+        # common-process signals... this will be a long bunch of if/else statements
+        if has_basis_ecorr and has_rn and has_gwb:
+            self._get_phi = self.get_phi_full
+        elif has_basis_ecorr and has_rn and not has_gwb:
+            self._get_phi = self.get_phi_ecorr_rn
+        elif not has_basis_ecorr and has_rn and has_gwb:
+            self._get_phi = self.get_phi_rn_gwb
+        elif not has_basis_ecorr and has_rn and not has_gwb:
+            self._get_phi = self.get_phi_rn_only
+        return
     
     @jax.jit
     def _get_delay_cw(self, pars):
@@ -209,15 +233,44 @@ class _Etudes1PsrSignal(object):
     def get_ndiag(self, pars):
         return self.wn_signal.get_ndiag(pars)
     
-    @jax.jit
-    def get_phi(self, pars):
-        #ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+    """
+    Different function variations for get_phi
+    """
+
+    # ECORR + red-noise + common red-noise
+    def get_phi_full(self, pars):
+        ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+        rn_phi = self.rn_signal.get_phi(pars)
+        gw_phi = self.gwb_signal.get_phi(pars)
+        rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
+    
+    # only red-noise
+    def get_phi_rn_only(self, pars):
+        rn_phi = self.rn_signal.get_phi(pars)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([rn_phi, tm_phi])
+    
+    # red-noise + common red-noise
+    def get_phi_rn_gwb(self, pars):
         rn_phi = self.rn_signal.get_phi(pars)
         gw_phi = self.gwb_signal.get_phi(pars)
         rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([rn_phi, tm_phi])
     
+    # ECORR + red-noise
+    def get_phi_ecorr_rn(self, pars):
+        ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+        rn_phi = self.rn_signal.get_phi(pars)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
+
+    @jax.jit
+    def get_phi(self, pars):
+        return self._get_phi(pars)
+
     @jax.jit
     def get_phiinv_logdet(self, pars):
         phi = self.get_phi(pars)
@@ -269,7 +322,7 @@ class _Etudes1PsrSignal(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (self.T, self.TNT), (self.psr, self.has_wn, self.has_basis_ecorr,
+        return (self.T, self.TNT), (self.psr, self.backend_select, self.has_wn, self.has_basis_ecorr,
                     self.has_rn, self.has_tm, self.has_gwb, self.has_cw,
                     self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
                     self.efac, self.equad, self.fix_wn, self.fix_wn_vals,
