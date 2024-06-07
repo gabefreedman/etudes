@@ -5,6 +5,8 @@ representation of ECORR, and common-process red noise signals such
 as the GWB (Correlations currently not implemented)
 """
 
+import numpy as np
+
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
@@ -54,20 +56,42 @@ def create_quantization_matrix(toas, dt=1, nmin=2):
     
     return U, weights
 
+def create_quant_matrix_selec(psr):
+    # loops through create_quantization matrix for instance where there
+    # is backend selection on ECORR. This is to extract a for loop outside
+    # of anything that would be JIT-compiled
+    Umats = []
+    weights = []
+
+    backends = np.unique(psr.backend_flags)
+    for i, val in enumerate(backends):
+        mask = (psr.backend_flags == val)
+        Umat, weight = create_quantization_matrix(psr.toas[jnp.nonzero(mask)])
+        Umats.append(Umat)
+        weights.append(weight)
+    
+    return Umats, weights
+
 @register_pytree_node_class
 class ECORR_GP_Signal(object):
     """
     Class for correlated white noise signal modeled with GPs
     """
-    def __init__(self, psr, Umat=None, weights=None):
+    def __init__(self, psr, Umat=None, weights=None, fix_wn=True,
+                 fix_wn_vals=True, **kwargs):
         self.psr = psr
 
         self.ecorrname = '{}_basis_ecorr_log10_ecorr'.format(psr.name)
 
         self.Umat = Umat
         self.weights = weights
+
+        self.fix_wn = fix_wn
+        self.fix_wn_vals = fix_wn_vals
+
     
     def _init_basis(self, psr):
+        # TODO: this recomputes at every step, should only be at initialization
         self.Umat, self.weights = create_quantization_matrix(psr.toas)
     
     def _ecorr_prior(self, pars):
@@ -84,8 +108,74 @@ class ECORR_GP_Signal(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psr, self.Umat, self.weights)
+        return (), (self.psr, self.Umat, self.weights, self.fix_wn, self.fix_wn_vals)
 
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children, *aux_data)
+
+
+@register_pytree_node_class
+class ECORR_GP_Signal_selec(object):
+    """
+    Correlated white noise signal modeled with GPs and split
+    by backend
+    """
+    def __init__(self, psr, Umats=None, weights=None, fix_wn=True,
+                 fix_wn_vals=True, **kwargs):
+        self.psr = psr
+
+        self.Umats = Umats
+        self.weights = weights
+        
+        self.fix_wn = fix_wn
+        self.fix_wn_vals = fix_wn_vals
+
+        self._select_by_backend(psr, fix_wn_vals)
+
+        if fix_wn:
+            self._init_fix_phi(psr)
+        else:
+            self._init_vary_phi(psr)
+    
+    def _select_by_backend(self, psr, fix_wn_vals):
+        backends = np.unique(psr.backend_flags)
+        self.masks = jnp.ones((backends.shape[0], psr.toas.shape[0]))
+        self.ecorrs = jnp.zeros(backends.shape[0])
+
+        for i, val in enumerate(backends):
+            mask_bool = (psr.backend_flags == val)
+            self.masks = self.masks.at[i,:].set(np.ma.array(np.ones(psr.toas.shape[0]), mask=~mask_bool, fill_value=0.0).filled())
+            self.ecorrs = self.ecorrs.at[i].set(fix_wn_vals['_'.join([psr.name, 'basis',
+                                                                     'ecorr', val, 'log10_ecorr'])])
+        return
+    
+    def _init_fix_phi(self, psr):
+        phislcs = []
+        for i, ecorr in enumerate(self.ecorrs):
+            phislcs.append(self.weights[i] * 10 ** (2 * ecorr))
+        
+        self._phi = jnp.concatenate(phislcs)
+        self._get_phi = self._return_fix_phi
+
+
+    def _init_vary_phi(self, psr):
+        # TODO: write case for varying ECORR
+        return
+
+    def _return_fix_phi(self, pars):
+        return self._phi
+
+    @jax.jit
+    def get_phi(self, pars):
+        # need to figure out why calling self._get_phi recompiles
+        return self._get_phi(pars)
+
+    # Necessary flatten and unflatten methods to register class
+    # as a PyTree
+    def tree_flatten(self):
+        return (), (self.psr, self.Umats, self.weights, self.fix_wn, self.fix_wn_vals)
+    
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, *aux_data)
