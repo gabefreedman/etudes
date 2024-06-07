@@ -60,17 +60,18 @@ def create_quant_matrix_selec(psr):
     # loops through create_quantization matrix for instance where there
     # is backend selection on ECORR. This is to extract a for loop outside
     # of anything that would be JIT-compiled
-    Umats = []
+
+    # need the full basis matrix (U) for all toas
+    # need the per-backend basis weights
+    Umat, _ = create_quantization_matrix(psr.toas)
     weights = []
 
     backends = np.unique(psr.backend_flags)
-    for i, val in enumerate(backends):
+    for val in backends:
         mask = (psr.backend_flags == val)
-        Umat, weight = create_quantization_matrix(psr.toas[jnp.nonzero(mask)])
-        Umats.append(Umat)
-        weights.append(weight)
+        weights.append(create_quantization_matrix(psr.toas[jnp.nonzero(mask)])[1])
     
-    return Umats, weights
+    return Umat, weights
 
 @register_pytree_node_class
 class ECORR_GP_Signal(object):
@@ -121,11 +122,11 @@ class ECORR_GP_Signal_selec(object):
     Correlated white noise signal modeled with GPs and split
     by backend
     """
-    def __init__(self, psr, Umats=None, weights=None, fix_wn=True,
+    def __init__(self, psr, Umat=None, weights=None, fix_wn=True,
                  fix_wn_vals=True, **kwargs):
         self.psr = psr
 
-        self.Umats = Umats
+        self.Umat = Umat
         self.weights = weights
         
         self.fix_wn = fix_wn
@@ -174,7 +175,7 @@ class ECORR_GP_Signal_selec(object):
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psr, self.Umats, self.weights, self.fix_wn, self.fix_wn_vals)
+        return (), (self.psr, self.Umat, self.weights, self.fix_wn, self.fix_wn_vals)
     
     @classmethod
     def tree_unflatten(cls, aux_data, children):
