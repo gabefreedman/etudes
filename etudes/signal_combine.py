@@ -197,6 +197,19 @@ class Etudes1PsrSignal(object):
         if has_cw:
             self.cw_signal = CW_Signal(psr, tref=tref)
     
+    def _init_phi_fn(self, has_basis_ecorr=False, has_rn=True, has_gwb=True):
+        # get_phi changes form based on presence of ECORR, red-noise signal,
+        # common-process signals... this will be a long bunch of if/else statements
+        if has_basis_ecorr and has_rn and has_gwb:
+            self._get_phi = self.get_phi_full
+        elif has_basis_ecorr and has_rn and not has_gwb:
+            self._get_phi = self.get_phi_ecorr_rn
+        elif not has_basis_ecorr and has_rn and has_gwb:
+            self._get_phi = self.get_phi_rn_gwb
+        elif not has_basis_ecorr and has_rn and not has_gwb:
+            self._get_phi = self.get_phi_rn_only
+        return
+    
     @jax.jit
     def _get_delay_cw(self, pars):
         return self.wn_signal.get_delay(pars) + self.cw_signal.get_delay(pars)
@@ -209,15 +222,44 @@ class Etudes1PsrSignal(object):
     def get_ndiag(self, pars):
         return self.wn_signal.get_ndiag(pars)
     
-    @jax.jit
-    def get_phi(self, pars):
-        #ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+    """
+    Different function variations for get_phi
+    """
+
+    # ECORR + red-noise + common red-noise
+    def get_phi_full(self, pars):
+        ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+        rn_phi = self.rn_signal.get_phi(pars)
+        gw_phi = self.gwb_signal.get_phi(pars)
+        rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
+    
+    # only red-noise
+    def get_phi_rn_only(self, pars):
+        rn_phi = self.rn_signal.get_phi(pars)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([rn_phi, tm_phi])
+    
+    # red-noise + common red-noise
+    def get_phi_rn_gwb(self, pars):
         rn_phi = self.rn_signal.get_phi(pars)
         gw_phi = self.gwb_signal.get_phi(pars)
         rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([rn_phi, tm_phi])
     
+    # ECORR + red-noise
+    def get_phi_ecorr_rn(self, pars):
+        ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
+        rn_phi = self.rn_signal.get_phi(pars)
+        tm_phi = self.tm_signal.get_phi(pars)
+        return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
+
+    @jax.jit
+    def get_phi(self, pars):
+        return self._get_phi(pars)
+
     @jax.jit
     def get_phiinv_logdet(self, pars):
         phi = self.get_phi(pars)
