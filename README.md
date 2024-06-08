@@ -17,4 +17,4 @@ See examples folder for tips on setting up a continuous gravitational wave sourc
 - More example notebooks/scripts.
 
 ## Favorite etudes?
-I'm only really familiar with the broader repoirtoire for piano. The Scriabin Etude in D-sharp minor Op.8 No. 12 is an all-time favorite. The Chopin Etude in E-Major Op. 10 No. 3 is also up there. How about you?
+I'm only really familiar with the broader repertoire for piano. The Scriabin Etude in D-sharp minor Op.8 No. 12 is an all-time favorite. The Chopin Etude in E-Major Op. 10 No. 3 is also up there. How about you?
