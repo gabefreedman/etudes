@@ -16,8 +16,14 @@ from jax.tree_util import register_pytree_node_class
 
 from etudes.wn_signals import WN_Signal, WN_Signal_selec
 from etudes.deterministic import CW_Signal
-from etudes.gp_signals import (ECORR_GP_Signal, ECORR_GP_Signal_selec, Timing_Model,
-                                      RN_Signal, Common_GW_Signal)
+from etudes.gp_signals import (
+    ECORR_GP_Signal,
+    ECORR_GP_Signal_selec,
+    Timing_Model,
+    RN_Signal,
+    Common_GW_Signal,
+)
+
 
 @register_pytree_node_class
 class _EtudesPTA(object):
@@ -30,6 +36,7 @@ class _EtudesPTA(object):
     function such that it can be written in terms of JAX primitives
     and break the natural looping over individual pulsars.
     """
+
     def __init__(self, psrs, signalcollections, param_names=None, fix_wn=True):
         self.psrs = psrs
         self.param_names = param_names
@@ -65,12 +72,12 @@ class _EtudesPTA(object):
             Sigma = sc.TNT + (jnp.diag(phiinv))
             cf = jsl.cho_factor(Sigma)
             expval = jsl.cho_solve(cf, TNr)
-            
+
             logdet_sigma = jnp.sum(2 * jnp.log(jnp.diag(cf[0])))
             loglike += 0.5 * (jnp.dot(TNr, expval) - logdet_sigma - logdet_phi)
 
         return loglike
-    
+
     @jax.jit
     def ll_fn_varywn(self, xs):
         params = self._map_params(xs)
@@ -88,25 +95,24 @@ class _EtudesPTA(object):
             Sigma = TNT + (jnp.diag(phiinv))
             cf = jsl.cho_factor(Sigma)
             expval = jsl.cho_solve(cf, TNr)
-            
+
             logdet_sigma = jnp.sum(2 * jnp.log(jnp.diag(cf[0])))
             loglike += 0.5 * (jnp.dot(TNr, expval) - logdet_sigma - logdet_phi)
 
         return loglike
-    
+
     @jax.jit
     def get_loglikelihood(self, xs):
         return self.ll_fn(xs)
-    
+
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psrs, self.signalcollections,
-                    self.param_names, self.fix_wn)
+        return (), (self.psrs, self.signalcollections, self.param_names, self.fix_wn)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, *aux_data)    
+        return cls(*children, *aux_data)
 
 
 @register_pytree_node_class
@@ -118,12 +124,31 @@ class Etudes1PsrSignal(object):
     TODO: Find a way to appropriately loop through all given signal
     functions such that it can be written in terms of JAX primitives.
     """
-    def __init__(self, T=None, TNT=None, psr=None, backend_select=False,
-                 has_wn=True, has_basis_ecorr=True,
-                 has_rn=True, has_tm=True, has_gwb=True, has_cw=True,
-                 Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                 efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
-                 rn_comps=30, gwb_comps=5, tref=0):
+
+    def __init__(
+        self,
+        T=None,
+        TNT=None,
+        psr=None,
+        backend_select=False,
+        has_wn=True,
+        has_basis_ecorr=True,
+        has_rn=True,
+        has_tm=True,
+        has_gwb=True,
+        has_cw=True,
+        Umat=None,
+        ecorr_weights=None,
+        Fmat=None,
+        Ffreqs=None,
+        efac=True,
+        equad=True,
+        fix_wn=True,
+        fix_wn_vals=None,
+        rn_comps=30,
+        gwb_comps=5,
+        tref=0,
+    ):
         self.psr = psr
         self.backend_select = backend_select
 
@@ -148,26 +173,41 @@ class Etudes1PsrSignal(object):
         self.gwb_comps = gwb_comps
         self.tref = tref
 
-        self._init_model(psr, has_wn=has_wn, has_basis_ecorr=has_basis_ecorr,
-                         has_tm=has_tm, has_rn=has_rn, has_gwb=has_gwb, has_cw=has_cw,
-                         Umat=Umat, ecorr_weights=ecorr_weights, Fmat=Fmat, Ffreqs=Ffreqs,
-                         efac=efac, equad=equad, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals,
-                         rn_comps=rn_comps, gwb_comps=gwb_comps, tref=tref)
+        self._init_model(
+            psr,
+            has_wn=has_wn,
+            has_basis_ecorr=has_basis_ecorr,
+            has_tm=has_tm,
+            has_rn=has_rn,
+            has_gwb=has_gwb,
+            has_cw=has_cw,
+            Umat=Umat,
+            ecorr_weights=ecorr_weights,
+            Fmat=Fmat,
+            Ffreqs=Ffreqs,
+            efac=efac,
+            equad=equad,
+            fix_wn=fix_wn,
+            fix_wn_vals=fix_wn_vals,
+            rn_comps=rn_comps,
+            gwb_comps=gwb_comps,
+            tref=tref,
+        )
         self.T, self.TNT = self._init_basis(Umat=Umat, Fmat=Fmat)
         self._init_get_delay(has_cw=has_cw)
-    
+
     def _init_basis(self, Umat=None, Fmat=None, fix_wn_vals=None):
         T = self.psr.Mmat
         if Fmat is not None:
             T = jnp.concatenate([Fmat, T], axis=1)
         if Umat is not None:
             T = jnp.concatenate([Umat, T], axis=1)
-        
+
         ndiag = self.wn_signal.get_ndiag(fix_wn_vals)[:, None]
         mult = T / ndiag
         TNT = jnp.dot(T.T, mult)
         return T, TNT
-    
+
     def _init_get_delay(self, has_cw=True):
         """
         get_delay functional form depends on whether or not a
@@ -178,36 +218,68 @@ class Etudes1PsrSignal(object):
         else:
             self.get_delay = self._get_delay_nocw
 
-
-    def _init_model(self, psr, backend_select=False, has_wn=True, has_basis_ecorr=False,
-                    has_tm=True, has_rn=True, has_gwb=True, has_cw=True,
-                    Umat=None, ecorr_weights=None, Fmat=None, Ffreqs=None,
-                    efac=True, equad=True, fix_wn=True, fix_wn_vals=None,
-                    rn_comps=30, gwb_comps=5, tref=0):
+    def _init_model(
+        self,
+        psr,
+        backend_select=False,
+        has_wn=True,
+        has_basis_ecorr=False,
+        has_tm=True,
+        has_rn=True,
+        has_gwb=True,
+        has_cw=True,
+        Umat=None,
+        ecorr_weights=None,
+        Fmat=None,
+        Ffreqs=None,
+        efac=True,
+        equad=True,
+        fix_wn=True,
+        fix_wn_vals=None,
+        rn_comps=30,
+        gwb_comps=5,
+        tref=0,
+    ):
         if has_wn:
             if backend_select:
-                self.wn_signal = WN_Signal_selec(psr, efac=efac, equad=equad, fix_wn=fix_wn,
-                                                 fix_wn_vals=fix_wn_vals)
+                self.wn_signal = WN_Signal_selec(
+                    psr, efac=efac, equad=equad, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals
+                )
             else:
-                self.wn_signal = WN_Signal(psr, efac=efac, equad=equad,
-                                           fix_wn=fix_wn, fix_wn_vals=fix_wn_vals)
+                self.wn_signal = WN_Signal(
+                    psr, efac=efac, equad=equad, fix_wn=fix_wn, fix_wn_vals=fix_wn_vals
+                )
         if has_basis_ecorr:
             if backend_select:
-                self.basis_ecorr_signal = ECORR_GP_Signal_selec(psr, Umat=Umat,
-                                                                weights=ecorr_weights, fix_wn=fix_wn,
-                                                                fix_wn_vals=fix_wn_vals)
+                self.basis_ecorr_signal = ECORR_GP_Signal_selec(
+                    psr,
+                    Umat=Umat,
+                    weights=ecorr_weights,
+                    fix_wn=fix_wn,
+                    fix_wn_vals=fix_wn_vals,
+                )
             else:
-                self.basis_ecorr_signal = ECORR_GP_Signal(psr, Umat=Umat, weights=ecorr_weights, fix_wn=fix_wn,
-                                                          fix_wn_vals=fix_wn_vals)
+                self.basis_ecorr_signal = ECORR_GP_Signal(
+                    psr,
+                    Umat=Umat,
+                    weights=ecorr_weights,
+                    fix_wn=fix_wn,
+                    fix_wn_vals=fix_wn_vals,
+                )
         if has_tm:
             self.tm_signal = Timing_Model(psr)
         if has_rn:
             self.rn_signal = RN_Signal(psr, Fmat=Fmat, Ffreqs=Ffreqs, ncomps=rn_comps)
         if has_gwb:
-            self.gwb_signal = Common_GW_Signal(psr, Fmat=Fmat[:,:2*gwb_comps], Ffreqs=Ffreqs[:2*gwb_comps], ncomps=gwb_comps)
+            self.gwb_signal = Common_GW_Signal(
+                psr,
+                Fmat=Fmat[:, : 2 * gwb_comps],
+                Ffreqs=Ffreqs[: 2 * gwb_comps],
+                ncomps=gwb_comps,
+            )
         if has_cw:
             self.cw_signal = CW_Signal(psr, tref=tref)
-    
+
     def _init_phi_fn(self, has_basis_ecorr=False, has_rn=True, has_gwb=True):
         # get_phi changes form based on presence of ECORR, red-noise signal,
         # common-process signals... this will be a long bunch of if/else statements
@@ -220,11 +292,11 @@ class Etudes1PsrSignal(object):
         elif not has_basis_ecorr and has_rn and not has_gwb:
             self._get_phi = self.get_phi_rn_only
         return
-    
+
     @jax.jit
     def _get_delay_cw(self, pars):
         return self.wn_signal.get_delay(pars) + self.cw_signal.get_delay(pars)
-    
+
     @jax.jit
     def _get_delay_nocw(self, pars):
         return self.wn_signal.get_delay(pars)
@@ -232,7 +304,7 @@ class Etudes1PsrSignal(object):
     @jax.jit
     def get_ndiag(self, pars):
         return self.wn_signal.get_ndiag(pars)
-    
+
     """
     Different function variations for get_phi
     """
@@ -242,24 +314,24 @@ class Etudes1PsrSignal(object):
         ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
         rn_phi = self.rn_signal.get_phi(pars)
         gw_phi = self.gwb_signal.get_phi(pars)
-        rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
+        rn_phi = rn_phi.at[: 2 * self.gwb_comps].add(gw_phi)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([ecorr_phi, rn_phi, tm_phi])
-    
+
     # only red-noise
     def get_phi_rn_only(self, pars):
         rn_phi = self.rn_signal.get_phi(pars)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([rn_phi, tm_phi])
-    
+
     # red-noise + common red-noise
     def get_phi_rn_gwb(self, pars):
         rn_phi = self.rn_signal.get_phi(pars)
         gw_phi = self.gwb_signal.get_phi(pars)
-        rn_phi = rn_phi.at[:2*self.gwb_comps].add(gw_phi)
+        rn_phi = rn_phi.at[: 2 * self.gwb_comps].add(gw_phi)
         tm_phi = self.tm_signal.get_phi(pars)
         return jnp.concatenate([rn_phi, tm_phi])
-    
+
     # ECORR + red-noise
     def get_phi_ecorr_rn(self, pars):
         ecorr_phi = self.basis_ecorr_signal.get_phi(pars)
@@ -275,7 +347,7 @@ class Etudes1PsrSignal(object):
     def get_phiinv_logdet(self, pars):
         phi = self.get_phi(pars)
         return 1.0 / phi, jnp.sum(jnp.log(phi))
-    
+
     @jax.jit
     def get_detres(self, pars):
         return self.psr.residuals - self.get_delay(pars)
@@ -284,12 +356,12 @@ class Etudes1PsrSignal(object):
     def get_TNr(self, pars):
         mult = self.get_detres(pars) / self.get_ndiag(pars)
         return jnp.dot(self.T.T, mult)
-    
+
     @jax.jit
     def get_TNT(self, pars):
         mult = self.T / self.get_ndiag(pars)[:, None]
         return jnp.dot(self.T.T, mult)
-    
+
     @jax.jit
     def get_rNr_logdet(self, pars):
         r = self.get_detres(pars)
@@ -298,7 +370,7 @@ class Etudes1PsrSignal(object):
         ret = jnp.dot(r.T, mult)
         logdet = jnp.sum(jnp.log(N))
         return ret + logdet
-    
+
     @jax.jit
     def get_ll(self, pars):
         loglike = 0
@@ -318,17 +390,32 @@ class Etudes1PsrSignal(object):
         loglike = loglike + 0.5 * (jnp.dot(TNr, expval) - logdet_sigma - logdet_phi)
 
         return loglike
-    
+
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (self.T, self.TNT), (self.psr, self.backend_select, self.has_wn, self.has_basis_ecorr,
-                    self.has_rn, self.has_tm, self.has_gwb, self.has_cw,
-                    self.Umat, self.ecorr_weights, self.Fmat, self.Ffreqs,
-                    self.efac, self.equad, self.fix_wn, self.fix_wn_vals,
-                    self.rn_comps, self.gwb_comps, self.tref)
+        return (self.T, self.TNT), (
+            self.psr,
+            self.backend_select,
+            self.has_wn,
+            self.has_basis_ecorr,
+            self.has_rn,
+            self.has_tm,
+            self.has_gwb,
+            self.has_cw,
+            self.Umat,
+            self.ecorr_weights,
+            self.Fmat,
+            self.Ffreqs,
+            self.efac,
+            self.equad,
+            self.fix_wn,
+            self.fix_wn_vals,
+            self.rn_comps,
+            self.gwb_comps,
+            self.tref,
+        )
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, *aux_data)
-

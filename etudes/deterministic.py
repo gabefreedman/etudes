@@ -28,10 +28,24 @@ def create_gw_antenna_pattern(pos, gwtheta, gwphi):
 
     # use definition from Sesana et al 2010 and Ellis et al 2012
     m = jnp.array([jnp.sin(gwphi), -jnp.cos(gwphi), 0.0])
-    n = jnp.array([-jnp.cos(gwtheta) * jnp.cos(gwphi), -jnp.cos(gwtheta) * jnp.sin(gwphi), jnp.sin(gwtheta)])
-    omhat = jnp.array([-jnp.sin(gwtheta) * jnp.cos(gwphi), -jnp.sin(gwtheta) * jnp.sin(gwphi), -jnp.cos(gwtheta)])
+    n = jnp.array(
+        [
+            -jnp.cos(gwtheta) * jnp.cos(gwphi),
+            -jnp.cos(gwtheta) * jnp.sin(gwphi),
+            jnp.sin(gwtheta),
+        ]
+    )
+    omhat = jnp.array(
+        [
+            -jnp.sin(gwtheta) * jnp.cos(gwphi),
+            -jnp.sin(gwtheta) * jnp.sin(gwphi),
+            -jnp.cos(gwtheta),
+        ]
+    )
 
-    fplus = 0.5 * (jnp.dot(m, pos) ** 2 - jnp.dot(n, pos) ** 2) / (1 + jnp.dot(omhat, pos))
+    fplus = (
+        0.5 * (jnp.dot(m, pos) ** 2 - jnp.dot(n, pos) ** 2) / (1 + jnp.dot(omhat, pos))
+    )
     fcross = (jnp.dot(m, pos) * jnp.dot(n, pos)) / (1 + jnp.dot(omhat, pos))
     cosMu = -jnp.dot(omhat, pos)
 
@@ -53,18 +67,18 @@ class CW_Signal(object):
         self.evolve = evolve
 
         self._init_delay(evolve=self.evolve)
-    
+
     def _init_delay(self, evolve=True):
         if evolve:
             self._freqevol_fn = self._full_evolve
         else:
             self._freqevol_fn = self._phase_approx
-    
+
     def _full_evolve(self, w0, mc, toas, phase0):
-        omega = w0 * (1 - 256/5 * mc**(5/3) * w0**(8/3) * toas)**(-3/8)
-        phase = phase0 + 1/32/mc**(5/3) * (w0**(-5/3) - omega**(-5/3))
+        omega = w0 * (1 - 256 / 5 * mc ** (5 / 3) * w0 ** (8 / 3) * toas) ** (-3 / 8)
+        phase = phase0 + 1 / 32 / mc ** (5 / 3) * (w0 ** (-5 / 3) - omega ** (-5 / 3))
         return omega, phase
-    
+
     def _phase_approx(self, w0, mc, toas, phase0):
         omega = w0
         phase = phase0 + omega * toas
@@ -72,12 +86,20 @@ class CW_Signal(object):
 
     def get_delay(self, pars, **kwargs):
         return self._get_delay(**pars, **kwargs)
-    
+
     @jax.jit
-    def _get_delay(self,
-                cw_costheta=0, cw_phi=0, cw_cosinc=0,
-                cw_log10_Mc=9, cw_log10_fgw=-8, cw_log10_h=-15,
-                cw_phase0=0, cw_psi=0, **kwargs):
+    def _get_delay(
+        self,
+        cw_costheta=0,
+        cw_phi=0,
+        cw_cosinc=0,
+        cw_log10_Mc=9,
+        cw_log10_fgw=-8,
+        cw_log10_h=-15,
+        cw_phase0=0,
+        cw_psi=0,
+        **kwargs,
+    ):
         """
         General CW signal delay function
         """
@@ -88,7 +110,7 @@ class CW_Signal(object):
         gwtheta = jnp.arccos(cw_costheta)
         inc = jnp.arccos(cw_cosinc)
 
-        dist = 2 * mc**(5/3) * (jnp.pi*fgw)**(2/3) / 10**cw_log10_h
+        dist = 2 * mc ** (5 / 3) * (jnp.pi * fgw) ** (2 / 3) / 10**cw_log10_h
 
         # get antenna pattern funcs and cosMu
         # write function to get pos from theta,phi
@@ -105,18 +127,18 @@ class CW_Signal(object):
         omega, phase = self._freqevol_fn(w0, mc, toas, phase0)
 
         # define time dependent coefficients
-        At = -0.5*jnp.sin(2*phase)*(3+jnp.cos(2*inc))
-        Bt = 2*jnp.cos(2*phase)*jnp.cos(inc)
+        At = -0.5 * jnp.sin(2 * phase) * (3 + jnp.cos(2 * inc))
+        Bt = 2 * jnp.cos(2 * phase) * jnp.cos(inc)
 
         # now define time dependent amplitudes
-        alpha = mc**(5./3.)/(dist*omega**(1./3.))
+        alpha = mc ** (5.0 / 3.0) / (dist * omega ** (1.0 / 3.0))
 
         # define rplus and rcross
-        rplus = alpha*(-At*jnp.cos(2*cw_psi)+Bt*jnp.sin(2*cw_psi))
-        rcross = alpha*(At*jnp.sin(2*cw_psi)+Bt*jnp.cos(2*cw_psi))
+        rplus = alpha * (-At * jnp.cos(2 * cw_psi) + Bt * jnp.sin(2 * cw_psi))
+        rcross = alpha * (At * jnp.sin(2 * cw_psi) + Bt * jnp.cos(2 * cw_psi))
 
         # residuals
-        res = -fplus*rplus - fcross*rcross
+        res = -fplus * rplus - fcross * rcross
 
         return res
 
@@ -128,4 +150,3 @@ class CW_Signal(object):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, *aux_data)
-

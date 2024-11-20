@@ -11,6 +11,7 @@ from jax.tree_util import register_pytree_node_class
 
 from etudes.signal_combine import _EtudesPTA
 
+
 @register_pytree_node_class
 class EtudesPTA(_EtudesPTA):
     """
@@ -19,41 +20,57 @@ class EtudesPTA(_EtudesPTA):
     but it helps to keep most of the messy argument handling in a separate,
     hidden class, and only focus on the important information here.
     """
-    def __init__(self, psrs, signalcollections, params,
-                 pmins=None, pmaxs=None, pavgs=None, **kwargs):
+
+    def __init__(
+        self,
+        psrs,
+        signalcollections,
+        params,
+        pmins=None,
+        pmaxs=None,
+        pavgs=None,
+        **kwargs,
+    ):
         super(EtudesPTA, self).__init__(psrs, signalcollections, **kwargs)
-        
+
         self.params = params
         self.signalcollections = signalcollections
         self.param_names = [par.name for par in params]
-        
+
         self.pmins = jnp.array([par.pmin for par in params])
         self.pmaxs = jnp.array([par.pmax for par in params])
         self.pavgs = (self.pmaxs + self.pmins) / 2
-    
+
     @jax.jit
     def get_lnprior(self, xs):
         # For now this will just be 0 since all test
         # priors are uniform
         return 0
-    
+
     @jax.jit
     def get_lnlikelihood(self, xs):
         return self.ll_fn(xs)
-    
+
     @jax.jit
     def get_lnprob(self, xs):
         return self.get_lnlikelihood(xs) + self.get_lnprior(xs)
-    
+
     # Necessary flatten and unflatten methods to register class
     # as a PyTree
     def tree_flatten(self):
-        return (), (self.psrs, self.signalcollections, self.params,
-                    self.pmins, self.pmaxs, self.pavgs)
+        return (), (
+            self.psrs,
+            self.signalcollections,
+            self.params,
+            self.pmins,
+            self.pmaxs,
+            self.pavgs,
+        )
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, *aux_data)
+
 
 @register_pytree_node_class
 class Interval(EtudesPTA):
@@ -61,27 +78,27 @@ class Interval(EtudesPTA):
     hyperparameters. It transforms the prior bounds for all parameters from
     some min and max value to positive and negative infinity.
     """
-    def __init__(self, psrs, signalcollections,
-                 params, **kwargs):
+
+    def __init__(self, psrs, signalcollections, params, **kwargs):
         super(Interval, self).__init__(psrs, signalcollections, params, **kwargs)
 
         self.a = self.pmins
         self.b = self.pmaxs
-    
+
     @jax.jit
     def forward(self, x):
         """
         Apply interval transformation to parameter vector.
         """
         return jnp.log((x - self.a) / (self.b - x))
-    
+
     @jax.jit
     def backward(self, p):
         """
         Undo the interval transformation.
         """
         return (self.b - self.a) * jnp.exp(p) / (1 + jnp.exp(p)) + self.a
-    
+
     @jax.jit
     def dxdp(self, p):
         """
@@ -89,31 +106,30 @@ class Interval(EtudesPTA):
         """
         pp = jnp.atleast_2d(p)
         d = jnp.ones_like(pp)
-        d = d.at[:].set((self.b-self.a)*jnp.exp(pp[:])/(1+jnp.exp(pp[:]))**2)
+        d = d.at[:].set((self.b - self.a) * jnp.exp(pp[:]) / (1 + jnp.exp(pp[:])) ** 2)
         return d.reshape(p.shape)
-    
+
     @jax.jit
     def logjacobian(self, p):
         """
         Log of Jacobian evaluated at input parameter vector.
         """
-        lj = jnp.sum(jnp.log(self.b-self.a) + p - 2*jnp.log(1.0+jnp.exp(p)))
-        
+        lj = jnp.sum(jnp.log(self.b - self.a) + p - 2 * jnp.log(1.0 + jnp.exp(p)))
+
         return lj
-    
+
     @jax.jit
     def logjacobian_grad(self, p):
         """
         Return both the log of the Jacobian and its gradient, both
         evaluated at the input parameter vector
         """
-        lj = jnp.sum(jnp.log(self.b-self.a) + p -
-                    2*jnp.log(1.0+jnp.exp(p)))
+        lj = jnp.sum(jnp.log(self.b - self.a) + p - 2 * jnp.log(1.0 + jnp.exp(p)))
 
         lj_grad = jnp.zeros_like(p)
         lj_grad = (1 - jnp.exp(p)) / (1 + jnp.exp(p))
         return lj, lj_grad
-    
+
     @jax.jit
     def get_lnprob(self, p):
         """
