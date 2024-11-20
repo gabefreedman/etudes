@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "etudes"
-authors = [{name = "Gabe Freedman", email = "freedma5@uwm.edu}]
+authors = [{name = "Gabe Freedman", email = "freedma5@uwm.edu"}]
 description = "PTA analyses with HMC and JAX"
 readme = "README.md"
 classifiers = ["License :: OSI Approved :: MIT License"]
