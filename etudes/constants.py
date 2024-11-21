@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-Useful constants. They're copied from constants.py in `enterprise`.
+Declare any physical constants for use in etudes modules.
 """
 
 import scipy.constants as sc
