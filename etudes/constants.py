@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Declare any physical constants for use in etudes modules.
 """
